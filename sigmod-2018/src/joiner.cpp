@@ -13,6 +13,7 @@
 
 namespace {
 
+// Left表示左边的关系表已经用过了，Right表示右边的关系表已经用过了
 enum QueryGraphProvides { Left, Right, Both, None };
 
 // Analyzes inputs of join
