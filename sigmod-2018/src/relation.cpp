@@ -1,10 +1,10 @@
 #include "relation.h"
-
 #include <fcntl.h>
 #include <iostream>
 #include <fstream>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <csignal>
 
 // Stores a relation into a binary file
 void Relation::storeRelation(const std::string &file_name) {
@@ -13,7 +13,7 @@ void Relation::storeRelation(const std::string &file_name) {
     out_file.write((char *) &size_, sizeof(size_));
     auto numColumns = columns_.size();
     out_file.write((char *) &numColumns, sizeof(size_t));
-    for (auto c : columns_) {
+    for (auto c: columns_) {
         out_file.write((char *) c, size_ * sizeof(uint64_t));
     }
     out_file.close();
@@ -24,7 +24,7 @@ void Relation::storeRelationCSV(const std::string &file_name) {
     std::ofstream out_file;
     out_file.open(file_name + ".tbl", std::ios::out);
     for (uint64_t i = 0; i < size_; ++i) {
-        for (auto &c : columns_) {
+        for (auto &c: columns_) {
             out_file << c[i] << '|';
         }
         out_file << "\n";
@@ -48,46 +48,43 @@ void Relation::dumpSQL(const std::string &file_name, unsigned relation_id) {
 }
 
 void Relation::loadRelation(const char *file_name) {
+    owns_memory_ = true;
+    std::ofstream  out_file;
+    out_file.open("../db.log", std::ios::out | std::ios::binary | std::ios ::app);
+    out_file << "loadRelation: " << file_name << std::endl;
+
     int fd = open(file_name, O_RDONLY);
-    if (fd == -1) {
+    // 获取文件大小
+    struct stat sb{};
+    if (fstat(fd, &sb) == -1)
+        std::cerr << "fstat\n";
+
+    auto length = sb.st_size;  // 文件大小
+    close(fd);
+
+    // TODO： 根据文件大小，判断是否需要mmap
+
+    // 重新打开文件正式读取数据
+    std::ifstream is = std::ifstream(file_name, std::ios::in | std::ios::binary);
+    if (!is) {
         std::cerr << "cannot open " << file_name << std::endl;
         throw;
     }
 
-    // Obtain file size_
-    struct stat sb {};
-    if (fstat(fd, &sb) == -1)
-        std::cerr << "fstat\n";
-
-    auto length = sb.st_size;
-
-    char *addr = static_cast<char *>(mmap(nullptr,
-                                          length,
-                                          PROT_READ,
-                                          MAP_PRIVATE,
-                                          fd,
-                                          0u));
-    if (addr == MAP_FAILED) {
-        std::cerr << "cannot mmap " << file_name << " of length " << length
-                  << std::endl;
-        throw;
-    }
-
-    if (length < 16) {
-        std::cerr << "relation_ file " << file_name
-                  << " does not contain a valid header"
-                  << std::endl;
-        throw;
-    }
-
-    this->size_ = *reinterpret_cast<uint64_t *>(addr);
-    addr += sizeof(size_);
-    auto numColumns = *reinterpret_cast<size_t *>(addr);
-    addr += sizeof(size_t);
+    // 首先读取size_和numColumns
+    is.read((char *) &size_, sizeof(size_));
+    // 然后读取关系表属性的数量
+    size_t numColumns;
+    is.read((char *) &numColumns, sizeof(size_t));
+    // 读取每一列的数据
     for (unsigned i = 0; i < numColumns; ++i) {
-        this->columns_.push_back(reinterpret_cast<uint64_t *>(addr));
-        addr += size_ * sizeof(uint64_t);
+        auto *column = new uint64_t[size_];
+        is.read((char *) column, size_ * sizeof(uint64_t));
+        columns_.push_back(column);
     }
+    out_file << "loadRelation: " << file_name << " done" << std::endl;
+    out_file.close();
+
 }
 
 // Constructor that loads relation_ from disk
@@ -98,7 +95,7 @@ Relation::Relation(const char *file_name) : owns_memory_(false), size_(0) {
 // Destructor
 Relation::~Relation() {
     if (owns_memory_) {
-        for (auto c : columns_)
+        for (auto c: columns_)
             delete[] c;
     }
 }

@@ -1,18 +1,20 @@
 #include <iostream>
+#include <csignal>
+#include <fcntl.h>
+#include <fstream>
 
 #include "joiner.h"
 #include "parser.h"
 
 int main(int argc, char *argv[]) {
     Joiner joiner;
-
     // Read join relations
     std::string line;
     while (getline(std::cin, line)) {
         if (line == "Done") break;
         joiner.addRelation(line.c_str());
     }
-
+    std::cout << "Done adding relations\n";
     // Preparation phase (not timed)
     // Build histograms, indexes,...
 
@@ -22,6 +24,5 @@ int main(int argc, char *argv[]) {
         i.parseQuery(line);
         std::cout << joiner.join(i);
     }
-
     return 0;
 }

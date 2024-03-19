@@ -75,6 +75,7 @@ int main(int argc, char *argv[]) {
     // Load the workload and result files and parse them into batches
     {
         std::ifstream work_file(argv[2]);
+        std::string a = argv[2];
         if (!work_file) {
             std::cerr << "Cannot open workload file" << std::endl;
             exit(EXIT_FAILURE);
