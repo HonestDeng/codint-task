@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
         if (line == "Done") break;
         joiner.addRelation(line.c_str());
     }
-    std::cout << "Done adding relations\n";
+//    std::cout << "Done adding relations\n";
     // Preparation phase (not timed)
     // Build histograms, indexes,...
 

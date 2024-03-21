@@ -14,25 +14,27 @@
 
 namespace std {
 /// Simple hash function to enable use with unordered_map
-template<>
-struct hash<SelectInfo> {
-    std::size_t operator()(SelectInfo const &s) const noexcept {
-        return s.binding ^ (s.col_id << 5);
-    }
-};
-};
+    template<>
+    struct hash<SelectInfo> {
+        std::size_t operator()(SelectInfo const &s) const noexcept {
+            return s.binding ^ (s.col_id << 5);
+        }
+    };
+}
 
 /// Operators materialize their entire result
 class Operator {
 protected:
     /// Mapping from select info to data
-    std::unordered_map<SelectInfo, unsigned> select_to_result_col_id_;
-    /// The materialized results
-    std::vector<uint64_t *> result_columns_;
-    /// The tmp results
-    std::vector<std::vector<uint64_t>> tmp_results_;
+//    std::unordered_map<SelectInfo, unsigned> select_to_result_col_id_;
+    /// The late-materialized results
+    std::vector<TupleId *> result_columns_;
+    /// The tmp results. tmp_results[i] is the list of tid filtered from the i-th table
+    std::vector<std::vector<TupleId>> tmp_results_;
     /// The result size
     uint64_t result_size_ = 0;
+    /// The query context
+    std::shared_ptr<Context> context_;
 
 public:
     /// The destructor
@@ -40,15 +42,21 @@ public:
 
     /// Require a column and add it to results
     virtual bool require(SelectInfo info) = 0;
+
     /// Resolves a column
     unsigned resolve(SelectInfo info) {
-        assert(select_to_result_col_id_.find(info) != select_to_result_col_id_.end());
-        return select_to_result_col_id_[info];
+//        assert(select_to_result_col_id_.find(info) != select_to_result_col_id_.end());
+        // info中的binding确定唯一的关系表，col_id确定唯一的列
+        // select_to_result_col_id_中存储的是列在result_columns_中的位置
+//        return select_to_result_col_id_[info];
+        return 0;
     }
+
     /// Run
     virtual void run() = 0;
-    /// Get  materialized results
-    virtual std::vector<uint64_t *> getResults();
+
+    /// Get  late-materialized results
+    virtual std::vector<std::vector<TupleId>> *getResults();
 
     uint64_t result_size() const {
         return result_size_;
@@ -64,14 +72,22 @@ protected:
 
 public:
     /// The constructor
-    Scan(const Relation &r, unsigned relation_binding)
-        : relation_(r), relation_binding_(relation_binding) {};
+    Scan(const Relation &r, unsigned relation_binding, std::shared_ptr<Context> context)
+            : relation_(r), relation_binding_(relation_binding) {
+        context_ = std::move(context);
+        for (int i = 0; i < context_->relations_.size(); i++) {
+            tmp_results_.emplace_back();
+        }
+    };
+
     /// Require a column and add it to results
     bool require(SelectInfo info) override;
+
     /// Run
     void run() override;
-    /// Get  materialized results
-    virtual std::vector<uint64_t *> getResults() override;
+
+    /// Get  late-materialized results
+    virtual std::vector<std::vector<TupleId>> *getResults() override;
 };
 
 class FilterScan : public Scan {
@@ -84,29 +100,33 @@ private:
 private:
     /// Apply filter
     bool applyFilter(uint64_t id, FilterInfo &f);
+
     /// Copy tuple to result
     void copy2Result(uint64_t id);
 
 public:
     /// The constructor
-    FilterScan(const Relation &r, std::vector<FilterInfo> filters)
-        : Scan(r,
-               filters[0].filter_column.binding),
-          filters_(filters) {};
+    FilterScan(const Relation &r, std::vector<FilterInfo> filters, std::shared_ptr<Context> context)
+            : Scan(r,
+                   filters[0].filter_column.binding, std::move(context)),
+              filters_(filters) {};
+
     /// The constructor
-    FilterScan(const Relation &r, FilterInfo &filter_info)
-        : FilterScan(r,
-                     std::vector<
-                     FilterInfo> {
-        filter_info
-    }) {};
+    FilterScan(const Relation &r, FilterInfo &filter_info, std::shared_ptr<Context> context)
+            : FilterScan(r,
+                         std::vector<
+                                 FilterInfo>{
+                                 filter_info
+                         }, std::move(context)) {};
 
     /// Require a column and add it to results
     bool require(SelectInfo info) override;
+
     /// Run
     void run() override;
-    /// Get  materialized results
-    virtual std::vector<uint64_t *> getResults() override {
+
+    /// Get  late-materialized results
+    virtual std::vector<std::vector<TupleId>> *getResults() override {
         return Operator::getResults();
     }
 };
@@ -126,15 +146,13 @@ private:
     std::unordered_set<SelectInfo> requested_columns_;
     /// Left/right columns that have been requested
     std::vector<SelectInfo> requested_columns_left_, requested_columns_right_;
-
-    /// The entire input data of left and right
-    std::vector<uint64_t *> left_input_data_, right_input_data_;
     /// The input data that has to be copied
-    std::vector<uint64_t *> copy_left_data_, copy_right_data_;
+    std::vector<std::vector<TupleId>> *left_input_, *right_input_;
 
 private:
     /// Copy tuple to result
     void copy2Result(uint64_t left_id, uint64_t right_id);
+
     /// Create mapping for bindings
     void createMappingForBindings();
 
@@ -142,10 +160,17 @@ public:
     /// The constructor
     Join(std::unique_ptr<Operator> &&left,
          std::unique_ptr<Operator> &&right,
-         const PredicateInfo &p_info)
-        : left_(std::move(left)), right_(std::move(right)), p_info_(p_info) {};
+         const PredicateInfo &p_info, std::shared_ptr<Context> context)
+            : left_(std::move(left)), right_(std::move(right)), p_info_(p_info) {
+        context_ = std::move(context);
+        for (int i = 0; i < context_->relations_.size(); i++) {
+            tmp_results_.emplace_back();
+        }
+    };
+
     /// Require a column and add it to results
     bool require(SelectInfo info) override;
+
     /// Run
     void run() override;
 };
@@ -158,11 +183,8 @@ private:
     PredicateInfo p_info_;
     /// The required IUs
     std::set<SelectInfo> required_IUs_;
-
     /// The entire input data
-    std::vector<uint64_t *> input_data_;
-    /// The input data that has to be copied
-    std::vector<uint64_t *> copy_data_;
+    std::vector<std::vector<TupleId>>* input_data_;
 
 private:
     /// Copy tuple to result
@@ -170,10 +192,17 @@ private:
 
 public:
     /// The constructor
-    SelfJoin(std::unique_ptr<Operator> &&input, PredicateInfo &p_info)
-        : input_(std::move(input)), p_info_(p_info) {};
+    SelfJoin(std::unique_ptr<Operator> &&input, PredicateInfo &p_info, std::shared_ptr<Context> context)
+            : input_(std::move(input)), p_info_(p_info) {
+        context_ = std::move(context);
+        for (int i = 0; i < context_->relations_.size(); i++) {
+            tmp_results_.emplace_back();
+        }
+    };
+
     /// Require a column and add it to results
     bool require(SelectInfo info) override;
+
     /// Run
     void run() override;
 };
@@ -190,14 +219,18 @@ private:
 public:
     /// The constructor
     Checksum(std::unique_ptr<Operator> &&input,
-             std::vector<SelectInfo> col_info)
-        : input_(std::move(input)), col_info_(std::move(col_info)) {};
+             std::vector<SelectInfo> col_info, std::shared_ptr<Context> context)
+            : input_(std::move(input)), col_info_(std::move(col_info)) {
+        context_ = std::move(context);
+    };
+
     /// Request a column and add it to results
     bool require(SelectInfo info) override {
         // check sum is always on the highest level
         // and thus should never request anything
         throw;
     }
+
     /// Run
     void run() override;
 

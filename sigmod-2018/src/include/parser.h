@@ -3,7 +3,9 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
+#include <memory>
 
 #include "relation.h"
 
@@ -151,3 +153,17 @@ private:
 
 };
 
+class Context {
+public:
+    Context(std::vector<const Relation*>& relations, std::shared_ptr<QueryInfo> query)
+        : relations_(relations), query_(std::move(query)) {}
+    // The relations
+    std::vector<const Relation*> relations_;
+    // The query
+    std::shared_ptr<QueryInfo> query_;
+
+    // Get the column of a select info
+    const TupleId* getColumn(const SelectInfo& info) const {
+        return relations_[info.binding]->columns()[info.col_id];
+    }
+};

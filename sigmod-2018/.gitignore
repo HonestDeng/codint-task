@@ -55,6 +55,10 @@ cmake-build-*
 .idea/
 #OS X specific files.
 .DS_store
+# data files
+./workloads/public
+./workloads/small/*.tbl
+./workloads/small/*.csv
 
 
 

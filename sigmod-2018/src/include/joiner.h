@@ -30,6 +30,6 @@ private:
     /// Add scan to query
     std::unique_ptr<Operator> addScan(std::set<unsigned> &used_relations,
                                       const SelectInfo &info,
-                                      QueryInfo &query);
+                                      QueryInfo &query, std::shared_ptr<Context> context);
 };
 
