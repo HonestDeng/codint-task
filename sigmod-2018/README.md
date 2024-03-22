@@ -1,3 +1,21 @@
+# 优化思路
+
+- [x]  理解项目的总体结构
+- [x]  将baseline代码中的materialized模型改成late-materialized模型，即每个算子的输入和输出是关系表中的tuple id，而不是一个新的关系表。
+- [x]  多线程处理query。
+- [ ]  提前为每一个表的每一列建立索引。担心内存不足，还没有实现。
+
+下面是优化前后的性能比较
+
+| Dataset | Baseline | Late-Materialized（8线程） |
+| --- | --- | --- |
+| workloads/public | 118704 | 73641 |
+| workloads/small | 478 | 633 |
+
+测试化境配置：
+
+1. 操作系统：Ubuntu 22.03
+2. 内存：16GB
 ## 项目总体概况
 
 这个项目是一个数据库优化竞赛。主办方提供了一个baseline代码。选手需要对代码进行优化，使得数据库可以以更高的效率执行join运算。
