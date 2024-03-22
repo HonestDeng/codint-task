@@ -5,7 +5,7 @@
 - [x]  多线程处理query。
 - [ ]  提前为每一个表的每一列建立索引。担心内存不足，还没有实现。
 
-下面是优化前后的性能比较
+下面是优化前后的性能比较。表格中的数字代表的是查询的时间，数字越小代表性能越好。
 
 | Dataset | Baseline | Late-Materialized（8线程） |
 | --- | --- | --- |
@@ -16,6 +16,23 @@
 
 1. 操作系统：Ubuntu 22.03
 2. 内存：16GB
+## How to run
+1. 选择baseline或者优化之后的代码
+```shell
+git checkout -f main # 优化之后的代码
+git checkout -f baseline # baseline代码
+```
+2. 运行测试
+```shell
+# 测试性能
+git checkout -f main
+mkdir build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Debug -DFORCE_TESTS=OFF .. # 不编译gtest测试用例
+make -j 8
+cd ..
+bash ./run_test_harness.sh ./workloads/public
+```
 ## 项目总体概况
 
 这个项目是一个数据库优化竞赛。主办方提供了一个baseline代码。选手需要对代码进行优化，使得数据库可以以更高的效率执行join运算。
