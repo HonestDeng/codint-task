@@ -165,7 +165,7 @@ void Joiner::printCheckSum() {
         if (res.has_value()) {
             results.emplace_back(res.value());
         }
-    } while (res != std::nullopt && results.size() < bs);
+    } while (res != std::nullopt && results.size() < batch_size_);
 
     sort(results.begin(), results.end(), [](const Response &a, const Response &b) {
         return a.first < b.first;

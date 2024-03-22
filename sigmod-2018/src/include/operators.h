@@ -45,10 +45,6 @@ public:
 
     /// Resolves a column
     unsigned resolve(SelectInfo info) {
-//        assert(select_to_result_col_id_.find(info) != select_to_result_col_id_.end());
-        // info中的binding确定唯一的关系表，col_id确定唯一的列
-        // select_to_result_col_id_中存储的是列在result_columns_中的位置
-//        return select_to_result_col_id_[info];
         return 0;
     }
 
@@ -152,9 +148,6 @@ private:
 private:
     /// Copy tuple to result
     void copy2Result(uint64_t left_id, uint64_t right_id);
-
-    /// Create mapping for bindings
-    void createMappingForBindings();
 
 public:
     /// The constructor

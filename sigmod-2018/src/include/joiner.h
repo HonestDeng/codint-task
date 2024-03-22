@@ -59,7 +59,9 @@ private:
 
     std::vector<std::thread> worker_threads_;
 
-    unsigned num_t = 5;
+    unsigned num_t_ = 5;  // 线程数量
+
+    size_t batch_size_ = 0;  // 批处理大小
 
 public:
     /// Add relation
@@ -70,13 +72,9 @@ public:
     /// Joins a given set of relations
     std::string join(QueryInfo &i);
 
-    Joiner() {
-        for(int i = 0; i < num_t; i++) {
-            worker_threads_.emplace_back([&]{StartWorkerThread();});
-        }
-    }
+    Joiner() = default;
     ~Joiner() {
-        for(int i = 0; i < num_t; i++) {
+        for(int i = 0; i < num_t_; i++) {
             request_queue_.Put(std::nullopt);
         }
         for(auto &t: worker_threads_) {
@@ -94,7 +92,16 @@ public:
 
     void printCheckSum();
 
-    size_t bs = 0;
+    void setBatchSize(size_t batch_size) {
+        batch_size_ = batch_size;
+    }
+
+    void setNumThreads(unsigned num_t) {
+        num_t_ = num_t;
+        for(int i = 0; i < num_t; i++) {
+            worker_threads_.emplace_back([&]{StartWorkerThread();});
+        }
+    }
 
 private:
     /// Add scan to query
