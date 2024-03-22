@@ -13,7 +13,7 @@ using Index = std::unordered_map<uint64_t, std::vector<TupleId>>;
 class Relation {
 private:
     /// Owns memory (false if it was mmaped)
-    bool owns_memory_ = true;
+    bool owns_memory_=true;
     /// The number of tuples
     uint64_t size_;
     /// The join column containing the keys

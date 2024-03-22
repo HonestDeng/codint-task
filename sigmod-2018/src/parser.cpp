@@ -125,8 +125,9 @@ void QueryInfo::resolveRelationIds() {
 }
 
 // Parse query [RELATIONS]|[PREDICATES]|[SELECTS]
-void QueryInfo::parseQuery(std::string &raw_query) {
+void QueryInfo::parseQuery(std::string &raw_query, size_t query_id) {
     clear();
+    query_id_ = query_id;
     std::vector<std::string> query_parts;
     splitString(raw_query, query_parts, '|');
     assert(query_parts.size() == 3);
@@ -142,6 +143,7 @@ void QueryInfo::clear() {
     predicates_.clear();
     filters_.clear();
     selections_.clear();
+    query_id_ = 0;
 }
 
 // Appends a selection info to the stream
@@ -245,6 +247,7 @@ std::string QueryInfo::dumpSQL() {
 }
 
 QueryInfo::QueryInfo(std::string raw_query) {
-    parseQuery(raw_query);
+    query_id_ = 0;
+    parseQuery(raw_query, 0);
 }
 

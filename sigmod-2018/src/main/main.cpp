@@ -14,15 +14,21 @@ int main(int argc, char *argv[]) {
         if (line == "Done") break;
         joiner.addRelation(line.c_str());
     }
-//    std::cout << "Done adding relations\n";
-    // Preparation phase (not timed)
-    // Build histograms, indexes,...
 
     QueryInfo i;
+    size_t query_id = 0;
+    size_t bs = 0;
+    std::map<size_t, std::string> responses;
     while (getline(std::cin, line)) {
-        if (line == "F") continue; // End of a batch
-        i.parseQuery(line);
-        std::cout << joiner.join(i);
+        if (line == "F"){
+            joiner.bs = bs;
+            bs = 0;
+            joiner.printCheckSum();
+            continue;
+        }
+        i.parseQuery(line, query_id++);
+        joiner.scheduleQuery(i);
+        bs++;
     }
     return 0;
 }

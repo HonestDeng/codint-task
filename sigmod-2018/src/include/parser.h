@@ -106,6 +106,8 @@ private:
     std::vector<SelectInfo> selections_;
 
 public:
+    /// The Query Id
+    size_t query_id_;
     /// The empty constructor
     QueryInfo() = default;
     /// The constructor that parses a query
@@ -118,7 +120,11 @@ public:
     /// Parse selections r1.a r1.b r3.c...
     void parseSelections(std::string &raw_selections);
     /// Parse selections [RELATIONS]|[PREDICATES]|[SELECTS]
-    void parseQuery(std::string &raw_query);
+    void parseQuery(std::string &raw_query, size_t query_id);
+    /// Parse selections [RELATIONS]|[PREDICATES]|[SELECTS]
+    void parseQuery(std::string &raw_query){
+        parseQuery(raw_query, 0);
+    }
 
     /// Dump text format
     std::string dumpText();
@@ -143,6 +149,11 @@ public:
     /// The selections
     const std::vector<SelectInfo> &selections() const {
         return selections_;
+    }
+
+    // 重载运算符，以便在排序时将QueryInfo对象按照query_id_排序
+    bool operator<(const QueryInfo &o) const {
+        return query_id_ < o.query_id_;
     }
 
 private:

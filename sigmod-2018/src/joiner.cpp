@@ -31,7 +31,6 @@ namespace {
             return QueryGraphProvides::Both;
         return QueryGraphProvides::None;
     }
-
 }
 
 // Loads a relation_ from disk
@@ -142,3 +141,36 @@ std::string Joiner::join(QueryInfo &query) {
     return out.str();
 }
 
+void Joiner::scheduleQuery(std::optional<QueryInfo> query) {
+    request_queue_.Put(*query);
+}
+
+void Joiner::StartWorkerThread() {
+    std::optional<QueryInfo> request;
+    do {
+        request = request_queue_.Get();  // thread waits for new request if request_queue_ is empty
+        if (request != std::nullopt) {
+            auto res = join(*request);
+            response_queue_.Put(std::make_pair(request.value().query_id_, res));
+        }
+    } while (request != std::nullopt);
+    response_queue_.Put(std::nullopt);
+}
+
+void Joiner::printCheckSum() {
+    std::vector<Response> results;
+    std::optional<Response> res;
+    do {
+        res = response_queue_.Get();
+        if (res.has_value()) {
+            results.emplace_back(res.value());
+        }
+    } while (res != std::nullopt && results.size() < bs);
+
+    sort(results.begin(), results.end(), [](const Response &a, const Response &b) {
+        return a.first < b.first;
+    });
+    for (const auto &r: results) {
+        std::cout << r.second;
+    }
+}
