@@ -1,226 +1,160 @@
-# 6.830 Programming Competition 2021
+## 项目总体概况
 
-## Task Details
+这个项目是一个数据库优化竞赛。主办方提供了一个baseline代码。选手需要对代码进行优化，使得数据库可以以更高的效率执行join运算。
 
-The task is to evaluate batches of join queries on a set of pre-defined
-relations. Each join query specifies a set of relations, (equality) join
-predicates, and selections (aggregations). The challenge is to execute
-the queries as fast as possible.
+项目有下面的几个文件需要理解：
 
-Input to your program will be provided on the standard input, and the
-output must appear on the standard output.
+1. run.sh：这是一个shell脚本，用于运行数据库本体。
+2. run_test_harness.sh：这也是一个shell脚本，用于运行测试。项目代码主要分为数据库代码和测试代码。run_test_harness.sh运行harness.cpp文件中的测试代码，用于测试数据库的性能。harness.cpp中的代码会使用fork+exec的方法运行数据库本体。
 
-## Testing Protocol
+# 项目baseline代码分析
 
-Our test harness will first feed the set of relations to your program's
-standard input. That means, your program will receive multiple lines
-(separated by the new line character '\n') where each one contains a
-string which represents the file name of the given relation. The relation
-files are already in a binary format and thus do not require parsing.
-All fields are unsigned 64 bit integers.
-Our starter package already contains sample code that mmaps() a
-relations into main memory.
-The binary format of a relation consists of
-a header and a data section. The header contains the number of tuples
-and the number of columns. The data section follows the header and stores
-all tuples using a column store. All of the values of a column
-are stored sequentially, followed by the values of the next column,
-and so on. The overall binary format is as follows (T0C0 stands for
-tuple 0 of column 0; pipe symbol '|' is not part of the binary format):
+## relation类
 
-```
-uint64_t numTuples|uint64_t numColumns|uint64_t T0C0|uint64_t T1C0|..|uint64_t TnC0|uint64_t T0C1|..|uint64_t TnC1|..|uint64_t TnCm
-```
+在baseline代码中，最底层的便是relation类。relation类有几个重要的成员，分别是：
 
-After sending the set of relations, our test harness will send a line
-containing the string "Done".
+1. std::vector<uint64_t *> columns_;
+2. void loadRelation(const char *file_name);
 
-Next, our test harness will wait for **60s** until it starts sending
-queries. This gives you time to prepare for the workload, e.g., 
-collecting statistics, creating indexes, etc. The test harness sends
-the workload in batches:
-A workload batch contains a set of join queries (each line represents a
-query). A join query consists of three consecutive parts (separated
-by the pipe symbol '|'):
+loadRelation函数的作用是从文件中加载关系表。baseline代码中使用的mmap的方式读取文件。columns_存储的关系表的每一列的地址。
 
-- **Relations**: A list of relations that will be joined. We will pass
-the ids of the relation here separated by spaces (' '). The relation ids
-are implicitly mapped to the relations by the order the relations were
-passed in the first phase. For instance, id 0 refers to the first relation.
+**改进**：建立一个buffer pool类来管理页面
 
-- **Predicates**: Each predicate is separated by a '&'. We have two types
-of predicates: filter predicates and join predicates. Filter predicates are
-of the form: filter column + comparison type (greater '>' less '<'
-equal '=') + integer constant. Join predicates specify on which columns the
-relations should be joined. A join predicate is composed out of two
-relation-column pairs connected with an equality ('=') operator. Here,
-a relation is identified by its offset in the list of relations to be
-joined (i.e., we implicitly bind the first relation of a join query to
-the identifier 0, the second one to 1, etc.).
+## parser.h
 
-- **Projections**: A list of columns that are needed to compute the final
-check sum that we use to verify that the join was done properly. Similar 
-to the join predicates, columns are denoted as relation-column pairs.
-Each selection is delimited by a space character (' ').
+parser.h文件中有三个结构体和一个类，负责存储查询语句中的信息。
 
-Example:
-```
-0 2 4|0.1=1.2&1.0=2.1&0.1>3000|0.0 1.1
-```
+### 输入的查询语句的规则
 
-Translation to SQL:
-```
-SELECT SUM("0".c0), SUM("1".c1)
-FROM r0 "0", r2 "1", r4 "2"
-WHERE 0.c1=1.c2 and 1.c0=2.c1 and 0.c1>3000
-```
-
-The end of a batch is indicated by a line containing the character 'F'.
-Our test harness will then wait for the results to be written to your
-program's standard output. For each join query, your program is required
-to output a line containing the check sums of the individual projections
-separated by spaces (e.g., "42 4711"). If there is no qualifying tuple,
-each check sum should return "NULL" like in SQL. Once the results have
-been received, we will start delivering the next workload batch.
-
-For your check sums, use SUM aggregation.
-You do not have to worry about numeric overflows as long as you are using
-64 bit unsigned integers.
-
-Your solution will be evaluated for correctness and execution time.
-Execution time measurement starts immediately after the 60s waiting
-period. You are free to fully utilize the waiting period for any kind of
-pre-processing.
-
-All join graphs are connected. There are no cross products. Cyclic queries and
-self joins are possible. We will provide more constraints soon.
-
-## Starter code
-
-We provide a starter package in C++. It is in the format required for
-submission. It includes a query parser and a relation loader.
-It implements a basic query execution model featuring full
-materialization. It does not implement any query optimization. It only
-uses standard STL containers (like unordered_map) for the join
-processing. Its query processing capabilities are limited to the
-demands of this contest.
-
-DISCLAIMER: Although we have tested the package
-intensively, we cannot guarantee that it is free of bugs. Thus, we test
-your submissions against the results computed by a real DBMS.
-
-This project is only meant to give you a quick start into the project and
-to dig right into the fun (coding) part. It is not required to use the
-provided code. You can create a submittable submission.tar.gz file using
-the included package.sh script.
-
-For testing, we provide a small workload in the required format.
-We also provide CSV versions (.tbl files) of each relation + SQL
-files to load the relations into a DBMS and a file
-(small.work.sql) that contains SQL versions of all queries in
-small.work.
-
-To build the starter code base run the following commands:
-```
-mkdir build
-cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make -j4
-```
-
-To build in debug mode run 
-`cmake -DCMAKE_BUILD_TYPE=Debug ..`
-
-To not build the tests run 
-`cmake -DCMAKE_BUILD_TYPE=Release -DFORCE_TESTS=OFF ..`
-
-This creates the binaries `driver`, `harness`, and `query2SQL` in `build`
-directory and `tester` in `build/test` directory. `driver` is the binary that
-interacts with our test harness `harness` according to the protocol described
-above. You can use `query2SQL` to transform our query format to SQL.
-
-`compile.sh` is the script we use for building your code in the testing environment. 
-It creates the binaries in `build/release` folder. It does not build unit tests
-as the testing environment does not have internet access. `run.sh` is the script
-the our test harness uses for running your executable. It expects the binaries
-in `build/release` folder. To test using our harness, first compile your code by
-running
+下面是一个输入的查询语句的实例：
 
 ```
-bash compile.sh
+9 0 2|0.1=1.0&1.0=2.2&0.0>12472|1.0 0.3 0.4
 ```
 
-To test the small workload using our test harness run
+一个查询语句由两个“|”分成三个部分。第一个部分是需要用到的关系的列表。上面的“9 0 2”是指，本条查询需要用到r9、r0和r2关系。第二个部分是谓词部分，用于指定filer和join的条件。比如，”0.1=1.0“表示第一部分的关系列表中的第0个关系表(r9)的第1列与第1个关系表(r0)的第0列相同，这是一个join的条件；又比如，“0.0>12472”表示第1个关系表(r0)的第0列需要大于12472，这是一个filer条件。最后一个部分指定需要投影的列。比如“1.0”表示第1个关系表(r0)的第0列。
+
+### SelectInfo
+
+一个结构体，负责表示查询语句上针对一个表的某一列的操作，包含三个重要成员：
+
+1. rel_id：关系的id
+2. col_id: 列的id
+3. binding：在查询语句的谓词部分，我们不直接使用关系表的真实名称，而是使用关系表的binding。具体请看[这里](https://www.notion.so/sigmoid-2018-aeba8445291a4569b39a6b3b309cc1c4?pvs=21)。
+
+### FilterInfo
+
+关于where语句的信息。主要包含下面三个成员：
+
+1. SelectInfo filter_column：说明了针对哪个表的那一列做筛选
+2. Comparison comparison：做筛选时的比较运算符
+3. uint64_t constant：常量
+
+比如, where a.c > 1，其中comparison就是a.c，constant就是1，comparison就是Greater
+
+### PredicateInfo
+
+记录了join运算应该在哪两个表的哪两列上进行。
+
+1. SelectInfo left;
+2. SelectInfo right;
+
+a join b with a.c = b.d，就有a.c就是left，b.d就是right。
+
+### QueryInfo类
+
+集合了SelectInfo、FilterInfo、PredicateInfo的信息。
+
+## Operator类
+
+bool require(SelectInfo info)函数：告诉Operator，info指向的这一列需要用到。最开始从checksum.run函数里被调用。checksum调用join算子的require函数，告诉require需要用到这些列。join算子又告诉scan算子需要用到这些列。
+
+std::unordered_map<SelectInfo, unsigned> select_to_result_col_id_; 记录selectinfo对应的列放在tmp_result的哪一个位置。
+
+unsigned resolve(SelectInfo info)
 
 ```
-bash run_test_harness.sh workloads/small
+    // info中的binding确定唯一的关系表，col_id确定唯一的列
+    // select_to_result_col_id_中存储的是列在result_columns_中的位置
 ```
 
-To execute all unit tests run 
+void run();
 
-```
-./tester
-```
+std::vector<std::vector<uint64_t>> tmp_results_ 存储物化关系表的缓冲池。join算子会把生成的新关系存储在tmp_results中
 
-To execute a specific unit test run 
+### Scan类
 
-```
-./tester --gtest_filter=<test_name>
-```
-For example,
-```
-./tester --gtest_filter=OperatorTest.ScanWithSelection
-```
+relation
 
-We encourage you to write your own tests to as you develop your code base.
-We have provided some examples using the
-[GoogleTest](https://github.com/google/googletest) framework in `test`
-folder.
+relation_binding
 
-## Evaluation
+### FilterScan类
 
-Our testing infrastructure will evaluate each submission by unpacking the
-submission file, compiling the submitted code (using your submitted
-compile.sh script), and then running a series of tests (using your
-submitted run.sh script). 
+std::vector<uint64_t *> input_data_;  存储关系表中需要用到的列？
 
-Each test uses the test harness to supply an initial dataset and a
-workload to your submitted program. The total time for each test is
-limited to 4-5 minutes (different tests may have slightly different
-limits). The total per-test time includes the time to ingest the dataset
-and the time to process the workload. 
+void copy2Result(uint64_t id);
 
-Submissions will be unpacked, compiled and tested in a network-isolated
-container. We will provide system specifications of the testing
-environment soon. 
+## joiner类
 
-A submission is considered to be rankable if it correctly processes all
-of the test workloads within their time limits. As discussed in the
-testing protocol description, initial import of relations is not included
-in a submission's score. The leaderboard will show the best rankable
-submission for each team that has at least one such submission.
+joiner是项目中负责执行
 
-We will use a larger dataset for evaluation. You can download it
-[here](http://dsg.csail.mit.edu/data/public.zip).
+analyzeInputOfJoin
 
+改进：修改join算法中的HT的用法
 
-## Submission
+# 改进
 
-Submit a single compressed tar file called submission.tar.gz and send it to yingfeng dot zhang AT gmail dot com.
-Submission files must be no larger than 5 MB - larger files will be
-rejected. 
+### 一次性将所有的表读入内存
 
-You can use the starter package, which has the required format, as a
-starting point. You are also required to submit a **technical report** on your improvements in English in either markdown or PDF format.
+### 排序
 
-## Rules
+很难做，因为不知道根据哪一个键排序
 
-- All submissions must consist only of code written by the team or open source
-licensed software (i.e., using an OSI-approved license). For source code from
-books or public articles, clear reference and attribution must be made.
-- Please keep your solution private and not make it publicly available.
+### 建立索引 && late-materialized机制
 
-## Acknowledgements
+1. 多线程建立索引
 
-This contest is adapted from SIGMOD 2018 programming contest. The starter code
-is a modified version of the quick start package provided with the contest.
+如果使用物化模型，则会导致join算子返回的关系表都是没有索引的新表，无法使用索引提高join的速度。
+
+### 多线程处理查询
+
+### 不实用全物化机制
+
+### 在使用完一个算子之后可以立刻释放算子拥有的资源
+
+## 改进进度
+
+### 3月20日
+
+在每一个operator中加入了context类记录执行的上下文信息，以解决下面的两个问题：
+
+1. 在late materilized模型中，operator只知道tuple id但是无法获取真实数据的问题
+2. 无法知道当前的query需要使用多少个关系表的问题
+
+### 3月21日
+
+将算子的输入修改为：vector<vecotr<TupleId>> input_data;
+
+将算子的输出修改为：vector<vector<TupleId>> tmp_data;
+
+![Untitled](https://prod-files-secure.s3.us-west-2.amazonaws.com/675ae1e4-871f-4d19-8233-b1315986757a/a66cb20c-2b73-438a-9b17-b82ff835a392/Untitled.jpeg)
+
+因为在baseline代码中，每一个算子都会生成一个全新的表，所以必须使用select_to_result_col_id_记录新生成的表的列与原本的关系表的列之间的关系。但是在我们实现的late-materialized方法中，算子的结果只包括每个表的tuple id，所以不需要记录新表的列和旧表的列之间的映射关系。所以也就不需要select_to_result_col_id_变量。
+
+同样的道理，在baseline代码中，父算子需要调用子算子的require函数，以告知子算子应该把原关系表中的哪一列放入到新生成的关系表中。但是在我们的要实现的late-materialized方法中，算子的结果是每一个表的tuple id，所以我们不需要使用require函数指定需要使用原关系表的哪一列。
+
+综上，我们需要删除select_to_result_col_id和require函数。
+
+将materialized转成了late-materialized模型之后，在public数据集上的查询时间优化到110215，而原本的时间是344683。
+
+很奇怪，昨天在public数据集上测试的结果明明是344683，但是刚才测试了一下昨天的方法，发现时间降到了87708。百思不得其解，难道说我优化了个寂寞？
+
+要不关机重启之后重新测试？
+
+下一步优化：多线程
+
+已完成多线程优化
+
+### 3月22日
+
+刚才看了一loadRelation函数的代码，突然发现在我写完了late-materialized之后，loadrelation函数的实现方式仍然是mmap。 😅
