@@ -17,12 +17,15 @@
 1. 操作系统：Ubuntu 22.03
 2. 内存：16GB
 ## How to run
-1. 选择baseline或者优化之后的代码
+1. 从这里下载public数据集合，并解压到项目根目录下workloads文件夹中：
+
+   http://dsg.csail.mit.edu/data/public.zip
+2. 选择baseline或者优化之后的代码
 ```shell
 git checkout -f main # 优化之后的代码
 git checkout -f baseline # baseline代码
 ```
-2. 运行测试
+3. 运行测试
 ```shell
 # 测试性能
 git checkout -f main
